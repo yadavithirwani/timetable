@@ -188,6 +188,101 @@ def build_cases(ws_id: str, seed: int = 0) -> List[Case]:
             if "?" not in out.get("reply", ""):
                 return f"didn't ask which section: {out.get('reply', '')[:120]}"
         cases.append(Case("ambiguous", f"swap class {g} {days[0]} 2nd and {days[1]} 3rd", chk_ambiguous, None))
+    cases += setup_cases(ws_id, rng)
+    return cases
+
+
+def _setup_quotas(out) -> Optional[Dict]:
+    p = out.get("setup")
+    if not p or not p.get("ok"):
+        return None
+    return W._proposals[p["proposal_id"]]["quotas"]
+
+
+def setup_cases(ws_id: str, rng: random.Random) -> List[Case]:
+    """Setup requests (periods per week, one class, availability, labs)."""
+    from backend.ingest.excel_loader import QuotaBook, normalise_class_name
+    rows, q = W._read(ws_id, "rows.json"), W.get_quotas(ws_id)
+    book = QuotaBook(q)
+    s, tt = W.school(ws_id), W.timetable(ws_id) or {}
+    cases: List[Case] = []
+    bands = {b: v["grades"] for b, v in q["bands"].items() if len(v["grades"]) > 1}
+    band_subjects = {}
+    for r in rows:
+        n = normalise_class_name(r["class"])
+        if n:
+            for b, g in bands.items():
+                if n[1] in g and r["subject"] not in ("CLASS TEACHER",):
+                    band_subjects.setdefault(b, set()).add(r["subject"])
+    band = rng.choice(sorted(band_subjects))
+    subject = rng.choice(sorted(band_subjects[band]))
+    cur = book.lookup("", bands[band][0], subject) or 1
+    new = cur + 1
+    lo, hi = min(bands[band]), max(bands[band])
+
+    def chk_band(out, band=band, subject=subject, new=new):
+        nq = _setup_quotas(out)
+        if nq is None:
+            return f"no setup proposal ({out.get('reply', '')[:120]})"
+        if nq.get("band_quotas", {}).get(band, {}).get(subject) != new:
+            return f"{subject} for {band} is {nq.get('band_quotas', {}).get(band, {}).get(subject)}, wanted {new}"
+    exp_band = ("propose_setup", {"changes": [{"type": "set_periods", "subject": subject, "periods": new, "grades": band}]})
+    cases += [
+        Case("setup_periods", f"{subject} should be {new} periods a week for grades {lo} to {hi}", chk_band, exp_band),
+        Case("setup_periods", f"class {lo}-{hi} mein {subject.lower()} ke {new} period kar do har hafte", chk_band, exp_band),
+    ]
+
+    # one class, relative change ("one more") - the model must look up the current value
+    cls = rng.choice([c for c in s["classes"] if not c.get("self_contained") and c["grade"] in bands[band]])
+    n = normalise_class_name(cls["name"])
+    cur_c = book.lookup(cls["name"], n[1], subject) or 0
+
+    def chk_class(out, cname=cls["name"], subject=subject, want=cur_c + 1):
+        nq = _setup_quotas(out)
+        if nq is None:
+            return f"no setup proposal ({out.get('reply', '')[:120]})"
+        got = nq.get("class_overrides", {}).get(cname, {}).get(subject)
+        if got != want:
+            return f"{cname} {subject} = {got}, wanted {want}"
+        if nq.get("band_quotas") != q.get("band_quotas"):
+            return "changed the whole grade group instead of one class"
+    cases.append(Case("setup_class", f"give {cls['name']} one extra {subject} period every week", chk_class,
+                      ("propose_setup", {"changes": [{"type": "set_periods", "subject": subject, "periods": cur_c + 1,
+                                                      "class": cls["name"]}]})))
+
+    # regular availability: either setup or a minimum-change timetable edit is a correct answer
+    cts = {c.get("class_teacher_id") for c in s["classes"]}
+    teacher = rng.choice(sorted(t["name"] for t in s["teachers"] if t["id"] not in cts and any(
+        a["teacher_id"] == t["id"] for a in tt.get("assignments", []))))
+    day = s["days"][-1]
+
+    def chk_avail(out, name=teacher, day=day):
+        nq = _setup_quotas(out)
+        if nq is not None:
+            got = {u["period"] for u in nq.get("teacher_unavailable", {}).get(name, []) if u["day"] == day}
+            return None if got == set(range(1, s["periods_per_day"] + 1)) else f"setup blocks {sorted(got)} on {day}"
+        new_asg = _proposed(out)
+        if new_asg is None:
+            return f"no proposal ({out.get('reply', '')[:120]})"
+        tid = next(t["id"] for t in s["teachers"] if t["name"] == name)
+        if any(a["teacher_id"] == tid and a["day"] == day for a in new_asg):
+            return f"{name} still teaches on {day}"
+    cases.append(Case("setup_availability", f"{teacher.title()} doesn't come on {day}s any more", chk_avail,
+                      ("propose_setup", {"changes": [{"type": "teacher_availability", "teacher": teacher, "day": day}]})))
+
+    # labs
+    if q.get("labs"):
+        lab = rng.choice(sorted(q["labs"]))
+        rooms = max(1, q["labs"][lab]["count"] - 1)
+
+        def chk_lab(out, lab=lab, rooms=rooms):
+            nq = _setup_quotas(out)
+            if nq is None:
+                return f"no setup proposal ({out.get('reply', '')[:120]})"
+            if nq.get("labs", {}).get(lab, {}).get("count") != rooms:
+                return f"{lab} rooms = {nq.get('labs', {}).get(lab, {}).get('count')}, wanted {rooms}"
+        cases.append(Case("setup_labs", f"we only have {rooms} {lab.lower()}{'s' if rooms > 1 else ''}", chk_lab,
+                          ("propose_setup", {"changes": [{"type": "lab", "lab": lab, "rooms": rooms}]})))
     return cases
 
 
@@ -212,6 +307,7 @@ def paraphrase(llm_key: str, text: str, n: int, model: Optional[str] = None) -> 
 
 def run(ws_id: str, llm: A.LLM, cases: List[Case], log: Callable[[str], None] = print) -> Dict:
     before = W.timetable(ws_id)
+    quotas_before = W.get_quotas(ws_id)
     results = []
     for c in cases:
         t0 = time.time()
@@ -222,9 +318,10 @@ def run(ws_id: str, llm: A.LLM, cases: List[Case], log: Callable[[str], None] = 
                 problem = f"claims the change is done: {out['reply'][:120]}"
         except Exception as e:  # provider error etc.
             out, problem = {"reply": "", "tool_log": []}, f"error: {type(e).__name__}: {e}"
-        if W.timetable(ws_id) != before:
-            problem = (problem or "") + " | SAVED TIMETABLE CHANGED WITHOUT APPLY"
+        if W.timetable(ws_id) != before or W.get_quotas(ws_id) != quotas_before:
+            problem = (problem or "") + " | SAVED TIMETABLE/SETUP CHANGED WITHOUT APPLY"
             W._write(ws_id, "timetable.json", before)
+            W._write(ws_id, "quotas.json", quotas_before)
         results.append({"intent": c.intent, "text": c.text, "ok": problem is None, "problem": problem,
                         "tools": [x["tool"] for x in out.get("tool_log", [])], "reply": out.get("reply", ""),
                         "seconds": round(time.time() - t0, 1)})

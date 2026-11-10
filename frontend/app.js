@@ -20,6 +20,8 @@ const state = {
   ttEntity: null,
   ttSearch: '',
   focus: null,
+  availOpen: null,   // teacher whose availability editor is open (Review)
+  classOpen: null,   // class whose periods editor is open (Review)
   swap: false,       // swap-by-clicking mode
   swapPick: null,    // {day, period} first cell picked
   chatOpen: false,
@@ -132,7 +134,7 @@ async function route() {
       Object.assign(state, { wsId, ws: null, quotas: null, rules: null, qDraft: null, tt: null, ttEntity: null, job: null, band: null, focus: null,
         chat: [], proposal: null, ai: null, swap: false, swapPick: null });
     }
-    if (page !== 'timetable' && state.chatOpen) openChat(false);
+    if (page !== 'timetable' && page !== 'review' && state.chatOpen) openChat(false);
     if (!wsId) Object.assign(state, { wsId: null, ws: null, tt: null });
     if (wsId && !state.ws) {
       view.innerHTML = '<div class="empty"><div class="progress-bar" style="margin:auto"><i></i></div></div>';
@@ -275,6 +277,7 @@ function renderReview() {
         <p>Read ${c.excel_rows} rows from <b>${esc(ws.workspace.filename)}</b>. Check the period counts, then generate.</p>
       </div>
       <div class="row">
+        <button class="btn primary" id="open-chat-review">${ICON.chat} Assistant</button>
         <label class="btn">${ICON.file} Replace file<input type="file" id="replace" accept=".xlsx" hidden></label>
         <button class="btn ghost danger" id="del">Delete</button>
       </div>
@@ -294,8 +297,9 @@ function renderReview() {
     <div class="tabs" role="tablist">
       ${tab('quotas', 'Periods per week', missing ? `<span class="badge warn">${missing} missing</span>` : '')}
       ${tab('classes', 'Classes', offWeek ? `<span class="badge warn">${offWeek}</span>` : '')}
-      ${tab('teachers', 'Teachers')}
+      ${tab('teachers', 'Teachers', Object.keys(state.quotas?.teacher_unavailable || {}).length ? `<span class="badge">${Object.keys(state.quotas.teacher_unavailable).length} part-time</span>` : '')}
       ${tab('joint', 'Joint lessons', `<span class="badge">${c.joint_lessons}</span>`)}
+      ${tab('labs', 'Labs', `<span class="badge">${Object.values(ws.labs || {}).reduce((a, l) => a + (l.count || 0), 0)}</span>`)}
       ${tab('settings', 'Week & rules')}
     </div>
     <div id="tab-body"></div>
@@ -306,6 +310,7 @@ function renderReview() {
 
   view.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => { state.reviewTab = t.dataset.tab; renderReview(); }));
   document.getElementById('next').addEventListener('click', () => go('generate'));
+  document.getElementById('open-chat-review').addEventListener('click', () => openChat(true));
   document.getElementById('replace').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -324,7 +329,7 @@ function renderReview() {
   });
 
   const body = document.getElementById('tab-body');
-  ({ quotas: reviewQuotas, classes: reviewClasses, teachers: reviewTeachers, joint: reviewJoint, settings: reviewSettings })[state.reviewTab](body);
+  ({ quotas: reviewQuotas, classes: reviewClasses, teachers: reviewTeachers, joint: reviewJoint, labs: reviewLabs, settings: reviewSettings })[state.reviewTab](body);
 }
 
 const stat = (label, value, sub) => `<div class="card stat"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${esc(sub)}</div></div>`;
@@ -342,7 +347,7 @@ function countChanges() {
   for (const [band, entries] of Object.entries(state.ws.quota_table)) {
     for (const e of entries) if (quotaValue(state.qDraft, band, e.subject) !== quotaValue(state.quotas, band, e.subject)) n++;
   }
-  return n;
+  return n + extraChanges();
 }
 
 function reviewQuotas(body) {
@@ -442,35 +447,61 @@ const bandOrder = (b) => { const m = String(b).match(/-?\d+/); return b === 'pre
 
 function reviewClasses(body) {
   const slots = state.ws.calendar.slots;
-  body.innerHTML = `<div class="class-grid">${state.ws.classes.map((c) => {
+  const open = state.ws.classes.find((c) => c.name === state.classOpen && !c.self_contained);
+  const overridden = state.qDraft.class_overrides || {};
+  body.innerHTML = `<p class="muted" style="margin-top:0">Click a class to change its periods per week without changing the rest of its grade.</p>
+    <div id="class-editor">${open ? classEditor(open) : ''}</div>
+    <div class="class-grid">${state.ws.classes.map((c) => {
     const real = c.total - c.filled_by_class_teacher;
     const cls = c.self_contained ? '' : c.total > slots ? 'over' : c.total < slots ? 'under' : '';
-    return `<div class="card class-card">
+    const nOver = Object.keys(overridden[c.name] || {}).length;
+    return `<button type="button" class="card class-card ${c.self_contained ? '' : 'clickable'} ${c.name === state.classOpen ? 'active' : ''}" data-class="${esc(c.name)}" ${c.self_contained ? 'disabled' : ''}>
       <div class="top"><span class="name">${esc(c.name)}</span><span class="mono ${cls ? '' : 'muted'}" style="${cls === 'over' ? 'color:var(--bad)' : cls === 'under' ? 'color:var(--warn)' : ''}">${c.total}/${slots}</span></div>
       <div class="fill ${cls}"><i style="width:${Math.min(100, real / slots * 100)}%"></i><i class="ct" style="width:${Math.min(100, c.filled_by_class_teacher / slots * 100)}%"></i></div>
       <div class="muted" style="font-size:13px">${c.self_contained ? 'Self-contained · ' : ''}CT ${esc(title(c.class_teacher) || '–')}${c.filled_by_class_teacher ? ` · +${c.filled_by_class_teacher} CT periods` : ''}</div>
-    </div>`;
-  }).join('')}</div>`;
+      ${nOver ? `<span class="badge accent" style="margin-top:6px">${nOver} own value${nOver > 1 ? 's' : ''}</span>` : ''}
+    </button>`;
+  }).join('')}</div>
+    <div id="savebar-slot"></div>`;
+  const redraw = () => reviewClasses(body);
+  body.querySelectorAll('.class-card.clickable').forEach((b) => { b.onclick = () => {
+    state.classOpen = state.classOpen === b.dataset.class ? null : b.dataset.class; redraw();
+    if (state.classOpen) document.getElementById('class-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }; });
+  if (open) wireClassEditor(document.getElementById('class-editor'), open, redraw);
+  renderSavebar();
 }
 
 function reviewTeachers(body) {
   body.innerHTML = `
     <div class="row" style="margin-bottom:12px"><input class="input" id="tsearch" placeholder="Search teachers or subjects" style="width:min(360px,100%)"></div>
-    <div class="card" style="overflow:auto;max-height:70vh"><table class="list-table"><thead><tr><th>Teacher</th><th>Periods / week</th><th>Subjects</th><th>Classes</th></tr></thead><tbody id="trows"></tbody></table></div>`;
+    <div class="card" style="overflow:auto;max-height:70vh"><table class="list-table"><thead><tr><th>Teacher</th><th>Periods / week</th><th>Available</th><th>Subjects</th><th>Classes</th></tr></thead><tbody id="trows"></tbody></table></div>
+    <div id="savebar-slot"></div>`;
   const rows = document.getElementById('trows');
   const draw = (q) => {
     const ql = q.toLowerCase();
     rows.innerHTML = state.ws.teachers.filter((t) => !ql || t.name.toLowerCase().includes(ql) || t.subjects.some((s) => s.toLowerCase().includes(ql)))
       .map((t) => {
         const pct = t.load / t.capacity;
-        return `<tr><td><b>${esc(title(t.name))}</b></td>
-          <td><div class="load"><span class="mono">${t.load}</span><span class="bar"><i class="${pct > 1 ? 'over' : pct > .85 ? 'hot' : ''}" style="width:${Math.min(100, pct * 100)}%"></i></span></div></td>
+        const offList = state.qDraft.teacher_unavailable?.[t.name] || [];
+        const changed = !jsonEq(offList.length ? offList : null, state.quotas.teacher_unavailable?.[t.name] || null);
+        const isOpen = state.availOpen === t.name;
+        return `<tr class="${isOpen ? 'open' : ''}"><td><b>${esc(title(t.name))}</b></td>
+          <td><div class="load" title="${t.load} of ${t.capacity} possible periods"><span class="mono">${t.load}/${t.capacity}</span><span class="bar"><i class="${pct > 1 ? 'over' : pct > .85 ? 'hot' : ''}" style="width:${Math.min(100, pct * 100)}%"></i></span></div></td>
+          <td><button type="button" class="link avail-btn ${changed ? 'changed' : ''}" data-avail="${esc(t.name)}">${offList.length ? esc(availSummary(offList)) + ' off' : 'Every period'}</button></td>
           <td><div class="chips">${t.subjects.map((s) => `<span class="badge">${esc(s)}</span>`).join('')}</div></td>
-          <td class="muted" style="font-size:13px">${esc(t.classes.join(', '))}</td></tr>`;
+          <td class="muted" style="font-size:13px">${esc(t.classes.join(', '))}</td></tr>
+          ${isOpen ? `<tr class="avail-row"><td colspan="5">${availEditor(t.name)}</td></tr>` : ''}`;
       }).join('');
+    rows.querySelectorAll('[data-avail]').forEach((b) => { b.onclick = () => {
+      state.availOpen = state.availOpen === b.dataset.avail ? null : b.dataset.avail; draw(search.value); }; });
+    const ed = rows.querySelector('.avail-row');
+    if (ed) wireAvail(ed, state.availOpen, () => draw(search.value));
+    renderSavebar();
   };
+  const search = document.getElementById('tsearch');
   draw('');
-  document.getElementById('tsearch').addEventListener('input', (e) => draw(e.target.value));
+  search.addEventListener('input', (e) => draw(e.target.value));
 }
 
 function reviewJoint(body) {
@@ -970,6 +1001,178 @@ function printAll() {
   window.print();
 }
 
+// ---------------------------------------------------------------- setup: labs, availability, per-class periods
+// All three edit the quotas draft (state.qDraft) and are saved with the same "Save & re-check" bar.
+
+const jsonEq = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+function diffKeys(a, b) {
+  a = a || {}; b = b || {};
+  let n = 0;
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (!jsonEq(a[k], b[k])) n++;
+  return n;
+}
+function extraChanges() {
+  const d = state.qDraft, s = state.quotas;
+  let n = diffKeys(d.labs, s.labs) + diffKeys(d.teacher_unavailable, s.teacher_unavailable);
+  const co = d.class_overrides || {}, so = s.class_overrides || {};
+  for (const c of new Set([...Object.keys(co), ...Object.keys(so)])) n += diffKeys(co[c], so[c]);
+  return n;
+}
+const slotSort = (a, b) => state.ws.calendar.days.indexOf(a.day) - state.ws.calendar.days.indexOf(b.day) || a.period - b.period;
+
+// --- labs
+function reviewLabs(body) {
+  const q = state.qDraft;
+  q.labs = q.labs || {};
+  const usage = state.ws.lab_usage || {};
+  const slots = state.ws.calendar.slots;
+  const taken = new Set(Object.values(q.labs).flatMap((l) => l.subjects || []));
+  const free = (state.ws.all_subjects || []).filter((s) => !taken.has(s));
+  body.innerHTML = `
+    <p class="muted" style="margin-top:0">Practical subjects are booked into a lab room. A lab can hold one class at a time, so the number of rooms limits how many practicals can run in the same period.</p>
+    <div class="lab-grid">
+      ${Object.entries(q.labs).map(([name, spec]) => {
+        const u = usage[name];
+        const cap = (spec.count || 0) * slots;
+        const pct = u && cap ? u.needed / cap : u?.needed ? 2 : 0;
+        return `<div class="card pad lab-card" data-lab="${esc(name)}">
+          <div class="row" style="justify-content:space-between"><h3>${esc(title(name))}</h3><button class="btn ghost danger" data-del-lab>Remove</button></div>
+          <div class="row" style="margin:10px 0"><span>Rooms</span>
+            <span class="stepper-input ${spec.count !== state.quotas.labs?.[name]?.count ? 'changed' : ''}">
+              <button type="button" data-lab-d="-" aria-label="Fewer ${esc(name)} rooms">−</button>
+              <input type="number" min="0" max="50" value="${spec.count ?? 0}" aria-label="Number of ${esc(name)} rooms" data-lab-count>
+              <button type="button" data-lab-d="+" aria-label="More ${esc(name)} rooms">+</button></span></div>
+          <div class="field" style="margin-bottom:8px">Subjects taught here</div>
+          <div class="chips">${(spec.subjects || []).map((s) => `<span class="badge accent chip-x">${esc(s)}<button type="button" data-rm="${esc(s)}" aria-label="Remove ${esc(s)}">×</button></span>`).join('') || '<span class="muted">None yet</span>'}</div>
+          <select class="input" data-add style="margin-top:10px"><option value="">+ Add a subject…</option>${free.map((s) => `<option>${esc(s)}</option>`).join('')}</select>
+          ${u ? `<div class="load" style="margin-top:12px"><span class="mono">${u.needed}/${cap}</span><span class="bar"><i class="${pct > 1 ? 'over' : pct > .85 ? 'hot' : ''}" style="width:${Math.min(100, pct * 100)}%"></i></span></div>
+            <div class="muted" style="font-size:12.5px">lab periods needed per week / available (as last saved)</div>` : '<div class="muted" style="font-size:12.5px;margin-top:10px">Save to see how busy it is.</div>'}
+        </div>`;
+      }).join('')}
+      <div class="card pad lab-card new-lab"><h3>Add a lab</h3>
+        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><input class="input" id="new-lab" placeholder="e.g. PHYSICS LAB"><button class="btn" id="add-lab">Add</button></div></div>
+    </div>
+    <div id="savebar-slot"></div>`;
+  const redraw = () => { reviewLabs(body); };
+  body.querySelectorAll('.lab-card[data-lab]').forEach((card) => {
+    const name = card.dataset.lab, spec = q.labs[name];
+    const setCount = (n) => { spec.count = Math.max(0, Math.min(50, Math.round(+n || 0))); redraw(); };
+    card.querySelector('[data-lab-d="-"]').onclick = () => setCount(spec.count - 1);
+    card.querySelector('[data-lab-d="+"]').onclick = () => setCount(spec.count + 1);
+    card.querySelector('[data-lab-count]').onchange = (e) => setCount(e.target.value);
+    card.querySelectorAll('[data-rm]').forEach((b) => { b.onclick = () => { spec.subjects = spec.subjects.filter((s) => s !== b.dataset.rm); redraw(); }; });
+    card.querySelector('[data-add]').onchange = (e) => { if (e.target.value) { spec.subjects = [...(spec.subjects || []), e.target.value]; redraw(); } };
+    card.querySelector('[data-del-lab]').onclick = () => { delete q.labs[name]; redraw(); };
+  });
+  document.getElementById('add-lab').onclick = () => {
+    const name = document.getElementById('new-lab').value.trim().toUpperCase();
+    if (!name) return;
+    if (q.labs[name]) { toast('That lab already exists', 'bad'); return; }
+    q.labs[name] = { count: 1, subjects: [] }; redraw();
+  };
+  renderSavebar();
+}
+
+// --- teacher availability
+function availSummary(list) {
+  if (!list?.length) return '';
+  const P = state.ws.calendar.periods_per_day;
+  const byDay = {};
+  for (const u of list) (byDay[u.day] ||= []).push(u.period);
+  return state.ws.calendar.days.filter((d) => byDay[d]).map((d) => {
+    const ps = byDay[d].sort((a, b) => a - b);
+    if (ps.length === P) return `${d.slice(0, 3)} (all day)`;
+    return `${d.slice(0, 3)} P${ps.join(',')}`;
+  }).join(' · ');
+}
+
+function availEditor(name) {
+  const { days, periods_per_day: P } = state.ws.calendar;
+  const off = new Set((state.qDraft.teacher_unavailable?.[name] || []).map((u) => `${u.day}|${u.period}`));
+  let h = `<div class="avail" style="grid-template-columns:56px repeat(${P}, minmax(30px,1fr))"><div></div>`;
+  for (let p = 1; p <= P; p++) h += `<button type="button" class="ah" data-col="${p}" title="Toggle period ${p} on every day">P${p}</button>`;
+  for (const d of days) {
+    h += `<button type="button" class="ad" data-row="${esc(d)}" title="Toggle the whole day">${esc(d.slice(0, 3))}</button>`;
+    for (let p = 1; p <= P; p++) {
+      const isOff = off.has(`${d}|${p}`);
+      h += `<button type="button" class="ac ${isOff ? 'off' : ''}" data-day="${esc(d)}" data-p="${p}" aria-pressed="${isOff}" aria-label="${esc(d)} period ${p}: ${isOff ? 'unavailable' : 'available'}">${isOff ? '✕' : ''}</button>`;
+    }
+  }
+  return `${h}</div>
+    <div class="row" style="margin-top:10px;justify-content:space-between">
+      <span class="muted" style="font-size:13px">Click the periods this teacher <b>can't</b> teach, every week. Click a day or a period number to toggle the whole row or column.</span>
+      <span class="row"><button type="button" class="btn ghost" data-clear>Clear</button><button type="button" class="btn" data-done>Done</button></span></div>`;
+}
+
+function setAvail(name, list) {
+  const q = state.qDraft;
+  q.teacher_unavailable = q.teacher_unavailable || {};
+  if (list.length) q.teacher_unavailable[name] = list.sort(slotSort);
+  else delete q.teacher_unavailable[name];
+}
+
+function wireAvail(container, name, redraw) {
+  const { days, periods_per_day: P } = state.ws.calendar;
+  const cur = () => new Set((state.qDraft.teacher_unavailable?.[name] || []).map((u) => `${u.day}|${u.period}`));
+  const save = (set) => { setAvail(name, [...set].map((k) => { const [day, p] = k.split('|'); return { day, period: +p }; })); redraw(); };
+  container.querySelectorAll('.ac').forEach((b) => { b.onclick = () => { const s = cur(), k = `${b.dataset.day}|${b.dataset.p}`; s.has(k) ? s.delete(k) : s.add(k); save(s); }; });
+  container.querySelectorAll('.ad').forEach((b) => { b.onclick = () => {
+    const s = cur(), keys = Array.from({ length: P }, (_, i) => `${b.dataset.row}|${i + 1}`);
+    const all = keys.every((k) => s.has(k)); keys.forEach((k) => (all ? s.delete(k) : s.add(k))); save(s); }; });
+  container.querySelectorAll('.ah').forEach((b) => { b.onclick = () => {
+    const s = cur(), keys = days.map((d) => `${d}|${b.dataset.col}`);
+    const all = keys.every((k) => s.has(k)); keys.forEach((k) => (all ? s.delete(k) : s.add(k))); save(s); }; });
+  container.querySelector('[data-clear]').onclick = () => save(new Set());
+  container.querySelector('[data-done]').onclick = () => { state.availOpen = null; redraw(); };
+}
+
+// --- per-class periods
+function classEditor(c) {
+  const slots = state.ws.calendar.slots;
+  const overrides = state.qDraft.class_overrides?.[c.name] || {};
+  const rows = c.subjects.filter((e) => e.subject !== 'CT ACTIVITY').map((e) => {
+    const grade = quotaValue(state.qDraft, c.band, e.subject);
+    const v = e.subject in overrides ? overrides[e.subject] : grade;
+    return { ...e, grade, v, over: e.subject in overrides };
+  });
+  const total = rows.reduce((a, r) => a + (r.v || 0) * r.rows, 0);
+  return `<div class="card pad class-editor">
+    <div class="row" style="justify-content:space-between">
+      <div><h3>Class ${esc(c.name)}</h3><div class="muted" style="font-size:13px">Change a number here to differ from the rest of grades ${esc(c.band)}. Other classes are not affected.</div></div>
+      <div class="row"><span class="badge ${total > slots ? 'bad' : total === slots ? 'good' : 'warn'}">${total}/${slots} periods${total < slots && state.qDraft.fill_remaining_with_class_teacher !== false ? ` · ${slots - total} go to the class teacher` : ''}</span>
+      <button class="btn" data-close-class>Done</button></div>
+    </div>
+    <table class="qtable" style="margin-top:10px"><thead><tr><th>Subject</th><th>Periods / week</th><th></th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td class="subj"><span class="subj-dot" style="background:${subjColor(r.subject).dot}"></span>${esc(r.subject)}${r.rows > 1 ? ` <span class="muted">×${r.rows} lessons</span>` : ''}</td>
+        <td><span class="stepper-input ${r.over ? 'changed' : ''}" data-cs="${esc(r.subject)}">
+          <button type="button" data-d="-" aria-label="Fewer periods of ${esc(r.subject)}">−</button>
+          <input type="number" min="0" value="${r.v ?? ''}" placeholder="?" aria-label="Periods per week of ${esc(r.subject)} for ${esc(c.name)}">
+          <button type="button" data-d="+" aria-label="More periods of ${esc(r.subject)}">+</button></span></td>
+        <td>${r.over ? `<span class="badge accent">only ${esc(c.name)}</span> <button class="link" data-reset="${esc(r.subject)}">use grade value (${r.grade ?? '–'})</button>` : `<span class="muted" style="font-size:12.5px">grade value</span>`}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function wireClassEditor(box, c, redraw) {
+  const setOverride = (subject, val) => {
+    const q = state.qDraft;
+    q.class_overrides = q.class_overrides || {};
+    const grade = quotaValue(q, c.band, subject);
+    const o = (q.class_overrides[c.name] ||= {});
+    if (val == null || val === grade) delete o[subject];
+    else o[subject] = Math.max(0, Math.min(state.ws.calendar.slots, Math.round(val)));
+    if (!Object.keys(o).length) delete q.class_overrides[c.name];
+    redraw();
+  };
+  box.querySelectorAll('[data-cs]').forEach((el) => {
+    const subject = el.dataset.cs, input = el.querySelector('input');
+    el.querySelector('[data-d="-"]').onclick = () => setOverride(subject, (+input.value || 0) - 1);
+    el.querySelector('[data-d="+"]').onclick = () => setOverride(subject, (+input.value || 0) + 1);
+    input.onchange = () => setOverride(subject, input.value === '' ? null : +input.value);
+  });
+  box.querySelectorAll('[data-reset]').forEach((b) => { b.onclick = () => setOverride(b.dataset.reset, null); });
+  box.querySelector('[data-close-class]').onclick = () => { state.classOpen = null; redraw(); };
+}
+
 // ---------------------------------------------------------------- edits: swap mode, assistant, undo
 // The assistant and the swap button never change the timetable themselves: they ask the
 // server for a *proposal* (smallest verified change), shown here with Apply / Discard.
@@ -1023,6 +1226,7 @@ async function runEdit(call) {
     if (r.reply !== undefined) {                     // assistant turn
       if (r.cover) pushChat({ role: 'cover', cover: r.cover });
       if (r.proposal) setProposal(r.proposal);
+      if (r.setup) pushChat({ role: 'setup', p: r.setup });
       pushChat({ role: 'assistant', text: r.reply });
       if (r.view && !r.proposal) showEntity(r.view);
     } else if (r.ok) setProposal(r);                // direct swap
@@ -1045,7 +1249,7 @@ function setProposal(p) {
   pushChat({ role: 'proposal', p });
   // jump to the first affected class so the highlight is visible
   const first = p.diff.changes[0];
-  if (first && state.ttMode === 'class') {
+  if (first && state.ttMode === 'class' && state.tt?._idx) {
     const cur = state.tt._idx.classes[state.ttEntity]?.name;
     if (!p.diff.changes.some((c) => c.classes.includes(cur))) showEntity({ kind: 'class', name: first.classes[0] });
   }
@@ -1071,6 +1275,24 @@ async function applyProposal(m) {
     await reloadTimetable();
     toast('Change applied. You can undo it from the toolbar.', 'good');
   } catch (e) { toast(e.message, 'bad'); m.done = 'expired'; state.proposal = null; drawMain(); }
+  drawChat();
+}
+
+async function applySetup(m) {
+  const dirty = state.qDraft && state.quotas && countChanges() > 0;
+  if (dirty && !confirm('You have unsaved changes on the Review page. Applying this replaces them. Continue?')) return;
+  try {
+    const ws = await postJSON(`/workspaces/${state.wsId}/setup-proposals/${m.p.proposal_id}/apply`);
+    m.done = 'applied';
+    const quotas = await api(`/workspaces/${state.wsId}/quotas`);
+    Object.assign(state, { quotas, qDraft: clone(quotas), tt: null, proposal: null });
+    setSummary(ws);
+    renderStepper(parseRoute().page);
+    const page = parseRoute().page;
+    if (page === 'review') renderReview();
+    else if (page === 'timetable') await renderTimetable();
+    toast(ws.errors.length ? 'Saved - some issues need fixing on the Review page' : 'Setup saved. Generate a new timetable when ready.', ws.errors.length ? 'bad' : 'good');
+  } catch (e) { toast(e.message, 'bad'); m.done = 'expired'; }
   drawChat();
 }
 
@@ -1129,7 +1351,12 @@ function dropBusy() { state.chat = state.chat.filter((m) => m.role !== 'busy'); 
 
 function suggestions() {
   const I = state.tt?._idx;
-  if (!I) return [];
+  if (parseRoute().page === 'review' || !I) {
+    const c = state.ws?.classes?.find((x) => !x.self_contained)?.name;
+    const t = state.ws?.teachers?.[0]?.name;
+    return [c && `How many periods of each subject does ${c} have?`, t && `${title(t)} doesn't come on Saturdays`,
+      'We have 2 computer labs, not 3', 'Make PE 3 periods a week for grades 6 to 8'].filter(Boolean);
+  }
   const cls = state.ttMode === 'class' ? I.classes[state.ttEntity]?.name : null;
   const t = state.ttMode === 'teacher' ? title(I.teachers[state.ttEntity]?.name || '') : null;
   const d = state.tt.days;
@@ -1152,11 +1379,15 @@ function drawChat() {
       <button class="btn ghost icon-only" id="chat-close" aria-label="Close assistant">✕</button>
     </div>
     <div class="chat-body" id="chat-body">
-      ${state.chat.length ? msgs : `<div class="chat-intro">
+      ${state.chat.length ? msgs : `<div class="chat-intro">${parseRoute().page === 'review' ? `
+        <p>Ask about or change the setup, for example:</p>
+        <ul><li>“Maths should be 7 periods a week in grades 9 and 10”</li><li>“Give 8 B one extra PE period”</li>
+        <li>“Mrs Kapoor only comes Monday to Thursday”</li><li>“We have one physics lab for CHEM/PHY PR”</li></ul>
+        <p class="muted">Each change is checked first; nothing is saved until you press Apply.</p>` : `
         <p>Ask for changes in plain words, for example:</p>
         <ul><li>“Swap 9 A's Monday 2nd period with Wednesday 4th”</li><li>“Move maths for 7 B to Friday period 3”</li>
-        <li>“Mrs Sharma is absent tomorrow, who can take her classes?”</li><li>“Mr Rao can't come on Saturdays anymore”</li></ul>
-        <p class="muted">Or use <b>Swap</b> in the toolbar and click two periods.</p></div>`}
+        <li>“Mrs Sharma is absent tomorrow, who can cover?”</li><li>“Mr Rao can't come on Saturdays anymore”</li></ul>
+        <p class="muted">Or use <b>Swap</b> in the toolbar and click two periods.</p>`}</div>`}
     </div>
     ${hasKey ? '' : `<div class="chat-key">
       <p>The assistant needs a Gemini API key on the server (<code>GEMINI_API_KEY</code>). You can also paste one here; it stays in this browser.</p>
@@ -1179,6 +1410,8 @@ function drawChat() {
   });
   el.querySelectorAll('[data-apply]').forEach((b) => b.addEventListener('click', () => applyProposal(state.chat[+b.dataset.apply])));
   el.querySelectorAll('[data-discard]').forEach((b) => b.addEventListener('click', () => discardProposal(state.chat[+b.dataset.discard])));
+  el.querySelectorAll('[data-apply-setup]').forEach((b) => b.addEventListener('click', () => applySetup(state.chat[+b.dataset.applySetup])));
+  el.querySelectorAll('[data-discard-setup]').forEach((b) => b.addEventListener('click', () => { const m = state.chat[+b.dataset.discardSetup]; m.done = 'discarded'; drawChat(); }));
   el.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => showEntity({ kind: b.dataset.kind, name: b.dataset.goto })));
 }
 
@@ -1196,6 +1429,18 @@ function renderMsg(m, i) {
         ${p.alternatives.length ? `<div class="muted" style="font-size:12px">or ${esc(p.alternatives.slice(0, 3).map((a) => title(a.teacher)).join(', '))}</div>` : ''}</td></tr>`).join('')}</tbody></table>`
         : '<p class="muted">No lessons that day.</p>'}
       <p class="muted" style="font-size:12px;margin:6px 0 0">The weekly timetable is unchanged.</p></div>`;
+  }
+  if (m.role === 'setup') {
+    const p = m.p;
+    const status = { applied: '<span class="badge good">✓ saved</span>', discarded: '<span class="badge">discarded</span>', expired: '<span class="badge warn">expired</span>' }[m.done] || '';
+    return `<div class="msg card-msg proposal ${m.done ? 'done' : ''}">
+      <div class="cm-head">Setup change ${status}</div>
+      <ul class="changes">${p.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+      ${p.new_errors.length ? `<div class="alert bad" style="margin:6px 0"><div><b>This would cause ${p.new_errors.length} problem${p.new_errors.length > 1 ? 's' : ''}:</b><ul>${p.new_errors.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join('')}</ul></div></div>` : '<div class="badge good">✓ no new problems</div>'}
+      ${p.fixed_errors.length ? `<div class="badge good" style="margin-top:6px">fixes ${p.fixed_errors.length} existing problem${p.fixed_errors.length > 1 ? 's' : ''}</div>` : ''}
+      ${p.clears_timetable && !m.done ? '<div class="muted" style="font-size:12.5px;margin-top:6px">Saving this means the timetable has to be generated again.</div>' : ''}
+      ${m.done ? '' : `<div class="row" style="margin-top:10px"><button class="btn primary" data-apply-setup="${i}">${p.new_errors.length ? 'Save anyway' : 'Apply'}</button><button class="btn" data-discard-setup="${i}">Discard</button></div>`}
+    </div>`;
   }
   if (m.role === 'proposal') {
     const p = m.p, d = p.diff;

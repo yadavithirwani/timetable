@@ -190,6 +190,20 @@ def build_school(rows: List[Dict[str, Any]], quota_cfg: Dict[str, Any]) -> Dict[
             if len(tids) > 1:
                 joint_index[key] = lesson
 
+    # --- 2b. teacher availability (part-timers, fixed days off), keyed by teacher name -------
+    by_name = {t["name"].strip().upper(): t for t in teachers.values()}
+    for name, slots_off in (quota_cfg.get("teacher_unavailable") or {}).items():
+        t = by_name.get(str(name).strip().upper())
+        if not t:
+            warnings.append(f"Availability set for '{name}', who has no lessons in this file - ignored.")
+            continue
+        seen = set()
+        for u in slots_off:
+            key = (u.get("day"), u.get("period"))
+            if key[0] in days and isinstance(key[1], int) and 1 <= key[1] <= ppd and key not in seen:
+                seen.add(key)
+                t["unavailable_slots"].append({"day": key[0], "period": key[1]})
+
     # --- 3. fill gaps with class-teacher periods ---------------------------
     load = defaultdict(int)
     for l in lessons:
@@ -209,7 +223,7 @@ def build_school(rows: List[Dict[str, Any]], quota_cfg: Dict[str, Any]) -> Dict[
             ct = c["class_teacher_id"]
             if gap <= 0 or not ct:
                 continue
-            spare = slots - tload[ct]
+            spare = slots - len(teachers[ct]["unavailable_slots"]) - tload[ct]
             fill = min(gap, max(0, spare))
             if fill < gap:
                 warnings.append(f"{c['name']}: {gap} unassigned periods but class teacher "

@@ -68,9 +68,15 @@ def check(school_in: Dict[str, Any], rules: Dict[str, Any]) -> Dict[str, List[st
             warnings.append(f"Class {cname.get(c, c)} has {n} of {slots} periods filled - "
                             f"{slots - n} will be free periods.")
 
+    tby = {x["id"]: x for x in s["teachers"]}
+
+    def off(t, day=None, period=None):
+        return [u for u in tby.get(t, {}).get("unavailable_slots", [])
+                if (day is None or u["day"] == day) and (period is None or u["period"] == period)]
+
     for t, n in teacher_load.items():
-        cap = min(slots, D * max_day) - len(next((x for x in s["teachers"] if x["id"] == t), {})
-                                           .get("unavailable_slots", []))
+        # per day: at most max_day periods, and never in a slot they're unavailable
+        cap = sum(min(max_day, P - len(off(t, d))) for d in s["days"])
         if n > cap:
             errors.append(f"{tname.get(t, t)} is given {n} periods a week but can teach at most {cap}.")
         elif n > 0.9 * cap:
@@ -79,6 +85,11 @@ def check(school_in: Dict[str, Any], rules: Dict[str, Any]) -> Dict[str, List[st
 
     for t, items in teacher_p1.items():
         need = sum(n for _, n in items)
+        free_p1 = D - len(off(t, period=1))
+        if need > free_p1 and need <= D:
+            errors.append(f"{tname.get(t, t)} must be in period 1 for {need} lessons a week "
+                          f"({', '.join(x for x, _ in items)}) but is unavailable in period 1 on "
+                          f"{', '.join(u['day'] for u in off(t, period=1))}.")
         if need > D:
             errors.append(f"{tname.get(t, t)} must be in period 1 for {need} lessons a week "
                           f"({', '.join(x for x, _ in items)}) but there are only {D} first periods.")

@@ -149,6 +149,33 @@ def set_quotas(ws_id: str, quotas: Dict) -> Dict[str, Any]:
         for subj, n in table.items():
             if not isinstance(n, int) or n < 0 or n > len(days) * ppd:
                 raise WorkspaceError(f"Quota for {subj} ({band}) must be a whole number between 0 and {len(days) * ppd}")
+    labs = quotas.get("labs", {})
+    if not isinstance(labs, dict):
+        raise WorkspaceError("labs must be an object")
+    used = {}
+    for lab, spec in labs.items():
+        if not str(lab).strip():
+            raise WorkspaceError("Every lab needs a name")
+        if not isinstance(spec, dict) or not isinstance(spec.get("count"), int) or not 0 <= spec["count"] <= 50:
+            raise WorkspaceError(f"Number of rooms for {lab} must be a whole number between 0 and 50")
+        subs = spec.get("subjects", [])
+        if not isinstance(subs, list) or not all(isinstance(x, str) for x in subs):
+            raise WorkspaceError(f"Subjects for {lab} must be a list of names")
+        for x in subs:
+            if x in used:
+                raise WorkspaceError(f"{x} is listed under both {used[x]} and {lab}; pick one lab")
+            used[x] = lab
+    for cls, table in (quotas.get("class_overrides") or {}).items():
+        if not isinstance(table, dict):
+            raise WorkspaceError(f"Overrides for {cls} must be an object")
+        for subj, n in table.items():
+            if not isinstance(n, int) or n < 0 or n > len(days) * ppd:
+                raise WorkspaceError(f"Periods of {subj} for {cls} must be a whole number between 0 and {len(days) * ppd}")
+    for name, slots_off in (quotas.get("teacher_unavailable") or {}).items():
+        if not isinstance(slots_off, list) or not all(
+                isinstance(u, dict) and isinstance(u.get("day"), str) and isinstance(u.get("period"), int)
+                for u in slots_off):
+            raise WorkspaceError(f"Availability for {name} must be a list of {{day, period}}")
     _write(ws_id, "quotas.json", quotas)
     rebuild(ws_id)
     return summary(ws_id)
@@ -228,6 +255,35 @@ def summary(ws_id: str) -> Dict[str, Any]:
             band_subjects[band][subject] = {"subject": subject, "classes": set(), "quota": quota, "source": source}
         band_subjects[band][subject]["classes"].add(cn)
 
+    # per class: each subject's periods and where the number comes from
+    class_subjects: Dict[str, Dict[str, Dict]] = defaultdict(dict)
+    overrides = quotas.get("class_overrides") or {}
+    for r in rows:
+        norm = normalise_class_name(r["class"])
+        if not norm or norm[0] in self_contained:
+            continue
+        cn, grade, _ = norm
+        e = class_subjects[cn].setdefault(r["subject"], {"subject": r["subject"], "rows": 0})
+        e["rows"] += 1
+        band_val = quotas.get("band_quotas", {}).get(book.grade_to_band.get(grade), {}).get(r["subject"])
+        if band_val is None:
+            band_val = quotas.get("default", {}).get(r["subject"])
+        e["grade_value"] = band_val
+        e["override"] = overrides.get(cn, {}).get(r["subject"])
+        e["periods"] = book.lookup(cn, grade, r["subject"])
+
+    tobj = {t["id"]: t for t in s["teachers"]}
+    max_day = rules.get("teacher_rules", {}).get("max_periods_per_day", s["periods_per_day"])
+
+    def capacity(tid):
+        off = Counter(u["day"] for u in tobj[tid].get("unavailable_slots", []))
+        return sum(min(max_day, s["periods_per_day"] - off[d]) for d in s["days"])
+
+    lab_need = Counter()
+    for l in s["lessons"]:
+        if l.get("lab"):
+            lab_need[l["lab"]] += l["periods_per_week"]
+
     def class_sort(name):
         n = normalise_class_name(name)
         return (n[1], n[2]) if n else (99, name)
@@ -253,9 +309,11 @@ def summary(ws_id: str) -> Dict[str, Any]:
             "class_teacher": tname.get(c.get("class_teacher_id"), ""),
             "total": slots if c.get("self_contained") else class_load[c["id"]],
             "filled_by_class_teacher": class_fill[c["id"]],
+            "subjects": sorted(class_subjects.get(c["name"], {}).values(), key=lambda e: e["subject"]),
         } for c in s["classes"]], key=lambda c: class_sort(c["name"])),
         "teachers": sorted([{
-            "id": t, "name": tname.get(t, t), "load": n, "capacity": slots,
+            "id": t, "name": tname.get(t, t), "load": n, "capacity": capacity(t),
+            "unavailable": tobj[t].get("unavailable_slots", []),
             "subjects": sorted(tsubjects[t]), "classes": sorted(tclasses[t], key=class_sort),
         } for t, n in tload.items()], key=lambda t: -t["load"]),
         "joint_lessons": [{
@@ -267,6 +325,9 @@ def summary(ws_id: str) -> Dict[str, Any]:
                         for band, subs in band_subjects.items()},
         "bands": quotas.get("bands", {}),
         "labs": quotas.get("labs", {}),
+        "lab_usage": {lab: {"needed": lab_need[lab], "capacity": spec.get("count", 0) * slots}
+                      for lab, spec in quotas.get("labs", {}).items()},
+        "all_subjects": sorted({r["subject"] for r in rows} - {"CLASS TEACHER"}),
         "import_warnings": s.get("import_warnings", []),
         "errors": diag["errors"],
         "warnings": diag["warnings"],
@@ -440,3 +501,29 @@ def undo(ws_id: str) -> Dict[str, Any]:
     _write(ws_id, "edits.json", last.get("edits", []))
     _write(ws_id, "history.json", hist)
     return {"undone": True, "edits": last.get("edits", []), "undo_available": len(hist)}
+
+
+# --------------------------------------------------------------------------- setup changes (chat assistant)
+def propose_setup(ws_id: str, changes: List[Dict]) -> Dict[str, Any]:
+    from backend.setup_edit import preview
+    quotas = get_quotas(ws_id)
+    res = preview(_read(ws_id, "rows.json"), quotas, get_rules(ws_id), changes)
+    if not res["ok"]:
+        return res
+    pid = uuid.uuid4().hex
+    _proposals[pid] = {"ws_id": ws_id, "kind": "setup", "quotas": res["quotas"], "base": quotas, "created": time.time()}
+    tt = timetable(ws_id)
+    return {"ok": True, "proposal_id": pid, "kind": "setup", "changes": res["changes"],
+            "new_errors": res["new_errors"], "fixed_errors": res["fixed_errors"], "still_errors": res["still_errors"],
+            "clears_timetable": bool(tt and tt.get("success"))}
+
+
+def apply_setup(ws_id: str, proposal_id: str) -> Dict[str, Any]:
+    p = _proposals.get(proposal_id)
+    if not p or p["ws_id"] != ws_id or p.get("kind") != "setup":
+        raise WorkspaceError("That suggestion has expired. Ask again.", 404)
+    if get_quotas(ws_id) != p["base"]:
+        raise WorkspaceError("The setup changed since this suggestion was made. Ask again.", 409)
+    s = set_quotas(ws_id, p["quotas"])
+    _proposals.pop(proposal_id, None)
+    return s

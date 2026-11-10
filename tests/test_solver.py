@@ -50,17 +50,34 @@ def test_impossible_locks_are_explained(small_school, rules):
     assert any("Requested" in v for v in res["violations"]), res["violations"]
 
 
-def test_hidden_infeasibility_is_explained(small_school, rules):
-    """Passes every counting check, but the class teacher can't be in period 1 on Monday."""
+def test_class_teacher_unavailable_in_period_one_caught_before_solving(small_school, rules):
     c = small_school["classes"][0]
     for t in small_school["teachers"]:
         if t["id"] == c["class_teacher_id"]:
             t["unavailable_slots"] = [{"day": "Monday", "period": 1}]
     res = generate_timetable(small_school, rules=rules, time_limit=5)
+    assert res["status"] == "INVALID_INPUT"
+    assert any("period 1" in v and "Monday" in v for v in res["violations"]), res["violations"]
+
+
+def test_hidden_infeasibility_is_explained(small_school, rules):
+    """Passes every counting check (teacher load 12 <= 16 available), but one of their lessons needs
+    6 periods and can have at most 2 a day on the 2 days they come in."""
+    from collections import Counter
+    s = small_school
+    cts = {c["class_teacher_id"] for c in s["classes"]}
+    load = Counter(t for l in s["lessons"] for t in l["teacher_ids"] for _ in range(l["periods_per_week"]))
+    lesson = next(l for l in s["lessons"] if len(l["teacher_ids"]) == 1 and l["teacher_ids"][0] not in cts
+                  and l["periods_per_week"] >= 5 and not l["fixed_period"] and not l.get("lab")
+                  and load[l["teacher_ids"][0]] <= 16)
+    tid = lesson["teacher_ids"][0]
+    for t in s["teachers"]:
+        if t["id"] == tid:
+            t["unavailable_slots"] = [{"day": d, "period": p} for d in s["days"][2:] for p in range(1, 9)]
+    res = generate_timetable(s, rules=rules, time_limit=5)
     assert res["status"] == "INFEASIBLE"
     expl = " | ".join(res["explanation"])
-    assert "unavailable on Monday period 1" in expl
-    assert "period 1" in expl
+    assert "unavailable on" in expl, expl
 
 
 def test_legacy_sample_school_still_works(rules):

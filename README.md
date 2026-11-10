@@ -89,7 +89,14 @@ To authorize custom ad-hoc translation operations:
 `./run.sh`, then open **http://localhost:8000**:
 
 1. **Upload** the class-wise `.xlsx` (or download the template / try the demo school).
-2. **Review** what was read: classes, teacher loads, joint lessons. Set **periods per week** per grade band (the Excel doesn't contain them), and the week & rules. Problems show up in plain English and block generation until fixed.
+2. **Review** what was read, and set what the Excel doesn't contain. Problems show up in plain English and block generation until fixed.
+   * **Periods per week**: per subject, per grade group.
+   * **Classes**: click a class to give it its own numbers (e.g. one extra Maths period for 9 A only).
+   * **Teachers**: mark the periods a part-time teacher can't teach, every week.
+   * **Labs**: set how many rooms each lab has and which practical subjects use it.
+   * **Week & rules**: the school week and the rules.
+
+   The **Assistant** works here too, e.g. *"PE should be 3 periods for grades 6 to 8"*, *"Mrs Kapoor doesn't come on Saturdays"*, *"we only have 2 computer labs"*. Each change is checked against the data first and saved only when you press Apply.
 3. **Generate** with a live chart of the solver improving the timetable; stop at any time and keep the best so far.
 4. **Explore** class and teacher timetables, a workload heatmap, print one or all, export to Excel.
 

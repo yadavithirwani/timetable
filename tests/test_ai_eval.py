@@ -56,7 +56,8 @@ class Liar(ScriptedLLM):
 
 def test_checkers_accept_correct_agent(ws):
     cases = ai_eval.build_cases(ws, seed=1)
-    assert {c.intent for c in cases} >= {"swap", "move", "avoid", "cover", "free", "impossible", "ambiguous"}
+    assert {c.intent for c in cases} >= {"swap", "move", "avoid", "cover", "free", "impossible", "ambiguous",
+                                         "setup_periods", "setup_class", "setup_availability", "setup_labs"}
     for c in cases:
         res = ai_eval.run(ws, Oracle(c), [c], log=lambda _: None)
         assert res["passed"] == 1, res["results"][0]

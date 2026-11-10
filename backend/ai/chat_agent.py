@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from backend import editing
+from backend import setup_edit
 from backend import workspaces as W
 
 MAX_STEPS = 6
@@ -157,6 +158,32 @@ TOOLS = [
          "(every week, the timetable is rearranged)."),
      "parameters": {"type": "object", "properties": {
          "changes": {"type": "array", "items": CHANGE_SCHEMA}}, "required": ["changes"]}},
+    {"name": "show_setup",
+     "description": "Read the school setup: topic 'periods' (periods per week per grade group, optionally name = a "
+                    "grade like '7' or group like '6-8'), 'class' (one class's periods, name = class), 'teacher' "
+                    "(when a teacher is not available), 'labs', or 'week' (days, periods per day, grade groups).",
+     "parameters": {"type": "object", "properties": {
+         "topic": {"type": "string", "enum": ["periods", "class", "teacher", "labs", "week"]},
+         "name": {"type": "string"}}, "required": ["topic"]}},
+    {"name": "propose_setup",
+     "description": (
+         "Change the school SETUP (the data the timetable is built from). Previewed and checked; the user presses "
+         "Apply, after which the timetable must be generated again. Change types: "
+         "set_periods {subject, periods, grades (a grade or group like '6-8') OR class (one class only)}; "
+         "teacher_availability {teacher, day, optional periods (default whole day), available: false to block / "
+         "true to free again} - every week; "
+         "lab {lab, optional rooms, optional add_subjects, optional remove_subjects, optional remove_lab}; "
+         "week {optional days (list of day names), optional periods_per_day}."),
+     "parameters": {"type": "object", "properties": {"changes": {"type": "array", "items": {
+         "type": "object", "properties": {
+             "type": {"type": "string", "enum": ["set_periods", "teacher_availability", "lab", "week"]},
+             "subject": {"type": "string"}, "periods": {"description": "number, or list of period numbers"},
+             "grades": {"type": "string"}, "class": {"type": "string"}, "teacher": {"type": "string"},
+             "day": {"type": "string"}, "available": {"type": "boolean"}, "lab": {"type": "string"},
+             "rooms": {"type": "integer"}, "add_subjects": {"type": "array", "items": {"type": "string"}},
+             "remove_subjects": {"type": "array", "items": {"type": "string"}}, "remove_lab": {"type": "boolean"},
+             "days": {"type": "array", "items": {"type": "string"}}, "periods_per_day": {"type": "integer"}},
+         "required": ["type"]}}}, "required": ["changes"]}},
 ]
 
 
@@ -180,6 +207,14 @@ How to work:
 - After propose_changes succeeds, summarise what moves in plain words and say they can press Apply to keep it or
   Discard. NEVER say a change has been made or saved - only Apply does that.
 - If the solver says a change is impossible, explain the reason simply and suggest an alternative.
+- Setup vs timetable: periods per week, labs, the school week and a teacher's regular availability are SETUP
+  (propose_setup; the timetable is rebuilt afterwards). Moving or swapping particular periods is a timetable change
+  (propose_changes). If a timetable already exists and a teacher can't come on a day from now on, prefer
+  propose_changes teacher_unavailable (it keeps the rest of the timetable); use propose_setup when setting things up
+  or when they explicitly want the setting changed.
+- "Maths should be 7 periods in class 7" is ambiguous between the whole grade group and one class: if they name a
+  section (7 A) use class; if they say a grade or group, use grades; otherwise ask.
+- After propose_setup, say what changes and any new problems it reports, and that Apply saves it.
 - Don't invent periods, teachers or rules. If asked something you can't do with these tools, say so.
 """
 
@@ -189,6 +224,7 @@ class TurnResult:
     reply: str
     proposal: Optional[Dict] = None
     cover: Optional[Dict] = None
+    setup: Optional[Dict] = None
     view: Optional[Dict] = None
     tool_log: List[Dict] = field(default_factory=list)
 
@@ -252,6 +288,22 @@ class Agent:
                             "changes": [c["text"] for c in res["diff"]["changes"][:25]],
                             "note": "Not applied yet: the user must press Apply."}
                 return {"ok": False, "message": res.get("message"), "reasons": res.get("reasons", [])}
+            if name == "show_setup":
+                return setup_edit.describe(W._read(self.ws_id, "rows.json"), W.get_quotas(self.ws_id), s,
+                                           args.get("topic"), args.get("name"))
+            if name == "propose_setup":
+                changes = args.get("changes") or []
+                if isinstance(changes, dict):
+                    changes = [changes]
+                res = W.propose_setup(self.ws_id, changes)
+                if res.get("ok"):
+                    out.setup = res
+                    return {"ok": True, "changes": res["changes"], "new_problems": res["new_errors"],
+                            "problems_fixed": res["fixed_errors"],
+                            "note": "Not saved yet: the user must press Apply." +
+                                    (" Applying clears the current timetable; it must be generated again."
+                                     if res["clears_timetable"] else "")}
+                return {"ok": False, "message": res.get("message")}
             return {"error": f"Unknown tool {name}"}
         except editing.EditError as e:
             return {"error": str(e)}
@@ -284,4 +336,5 @@ def chat(ws_id: str, message: str, history=None, llm: Optional[LLM] = None, api_
         raise W.WorkspaceError("The assistant needs a Gemini API key. Set GEMINI_API_KEY on the server "
                                "(or add one in the assistant's settings).", 503)
     r = Agent(ws_id, llm).run(message, history)
-    return {"reply": r.reply, "proposal": r.proposal, "cover": r.cover, "view": r.view, "tool_log": r.tool_log}
+    return {"reply": r.reply, "proposal": r.proposal, "cover": r.cover, "setup": r.setup, "view": r.view,
+            "tool_log": r.tool_log}

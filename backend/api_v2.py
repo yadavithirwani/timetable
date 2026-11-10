@@ -247,3 +247,16 @@ def undo(ws_id: str):
 @router.delete("/workspaces/{ws_id}/edits/{edit_id}")
 def forget_edit(ws_id: str, edit_id: str):
     return _guard(lambda: {"edits": W.remove_edit(ws_id, edit_id)})
+
+
+@router.post("/workspaces/{ws_id}/setup-proposals/{pid}/apply")
+def apply_setup(ws_id: str, pid: str):
+    return _guard(lambda: W.apply_setup(ws_id, pid))
+
+
+@router.post("/workspaces/{ws_id}/setup-proposals")
+def propose_setup(ws_id: str, body: Dict[str, Any] = Body(...)):
+    changes = body.get("changes")
+    if not isinstance(changes, list) or not changes:
+        return _err(W.WorkspaceError("changes must be a non-empty list"))
+    return _guard(lambda: W.propose_setup(ws_id, changes))
