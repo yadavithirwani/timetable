@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.db
+venv/
+.venv/
+node_modules/
+.DS_Store
+*.egg-info/
+dist/
+build/
+output/
+.pytest_cache/
+data_store/
+
+# real school data: never push (teacher names). Keep these files local only.
+config/*.xlsx
+config/my_school_config.json
+backend/data/saved_timetable.json

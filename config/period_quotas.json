@@ -1,0 +1,158 @@
+{
+  "_help": "Periods per week for each subject, per grade band. The Excel export has no period counts, so THESE NUMBERS ARE THE SCHOOL'S POLICY and should be checked by the timetable in-charge. Lookup order: class_overrides > band > default. Each Excel row is one lesson; a multi-teacher row (e.g. 'DANCE/YOGA') is one lesson where every listed teacher is present.",
+  "calendar": {
+    "days": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "periods_per_day": 8
+  },
+  "bands": {
+    "pre": {
+      "grades": [
+        -1,
+        0
+      ]
+    },
+    "1-2": {
+      "grades": [
+        1,
+        2
+      ]
+    },
+    "3-5": {
+      "grades": [
+        3,
+        4,
+        5
+      ]
+    },
+    "6-8": {
+      "grades": [
+        6,
+        7,
+        8
+      ]
+    },
+    "9-10": {
+      "grades": [
+        9,
+        10
+      ]
+    },
+    "11-12": {
+      "grades": [
+        11,
+        12
+      ]
+    }
+  },
+  "default": {
+    "CLASS TEACHER": 6,
+    "LIBRARY": 1,
+    "PHY EDU": 2
+  },
+  "band_quotas": {
+    "1-2": {
+      "ENG": 8,
+      "MATHS": 8,
+      "HINDI": 6,
+      "EVS": 5,
+      "COMPUTERS": 1,
+      "GK": 1,
+      "STORY TIME": 1,
+      "LIFE SKILLS": 1,
+      "MUSIC": 2,
+      "DANCE": 2,
+      "ART": 1
+    },
+    "3-5": {
+      "ENG": 7,
+      "MATHS": 7,
+      "HINDI": 5,
+      "EVS": 5,
+      "COMPUTERS": 1,
+      "COMPUTERS-PR": 1,
+      "GK": 1,
+      "STORY TIME": 1,
+      "LIFE SKILLS": 1,
+      "MUSIC/TABLA": 2,
+      "DANCE": 2,
+      "ART": 2,
+      "PUNJABI": 2,
+      "MUSIC": 2,
+      "YOGA": 1,
+      "WM": 1
+    },
+    "6-8": {
+      "ENG": 6,
+      "MATHS": 6,
+      "SCIENCE": 6,
+      "SST": 5,
+      "HINDI": 4,
+      "PUNJABI": 2,
+      "KB": 1,
+      "COMPUTERS": 1,
+      "COMPUTERS-PR": 1,
+      "LIFESKILLS/GK": 1,
+      "DANCE/YOGA": 2,
+      "MUSIC": 2,
+      "ART": 2
+    },
+    "9-10": {
+      "ENG": 6,
+      "MATHS": 7,
+      "PHYSICS": 3,
+      "CHEMISTRY": 3,
+      "BIOLOGY": 3,
+      "SCIENCE": 6,
+      "SST": 5,
+      "ECONOMICS": 1,
+      "HIN/PUN": 5,
+      "COMPUTERS": 2,
+      "COMPUTERS-PR": 1,
+      "VPA": 2
+    },
+    "11-12": {
+      "ENG": 6,
+      "PHYSICS": 7,
+      "CHEMISTRY": 7,
+      "MATHS": 7,
+      "ACCOUNTS": 7,
+      "BST": 7,
+      "ECONOMICS": 7,
+      "POL SC": 7,
+      "CS/BIO/ECO": 7,
+      "CS/BIO/ECO/PR": 2,
+      "BIO/ECO/CS-PR": 2,
+      "CHEM/PHY PR": 2,
+      "M/PS/MU/A/PHE": 4,
+      "ACC/MATHS/CS/VM/PSYCH/PAT": 4,
+      "MATHS/PAT/E.P": 7,
+      "M": 7
+    }
+  },
+  "class_overrides": {},
+  "labs": {
+    "COMPUTER LAB": {
+      "count": 3,
+      "subjects": [
+        "COMPUTERS-PR",
+        "CS/BIO/ECO/PR",
+        "BIO/ECO/CS-PR"
+      ]
+    },
+    "SCIENCE LAB": {
+      "count": 2,
+      "subjects": [
+        "CHEM/PHY PR"
+      ]
+    }
+  },
+  "fill_remaining_with_class_teacher": true,
+  "max_periods_per_day_per_lesson": 2
+}

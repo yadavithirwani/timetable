@@ -1,0 +1,17 @@
+# keep real school data and local state out of the image
+config/*.xlsx
+config/my_school_config.json
+backend/data/saved_timetable.json
+data_store/
+output/
+venv/
+.venv/
+**/__pycache__/
+.pytest_cache/
+.git/
+.claude/
+article/
+*.ipynb
+debug_solver.py
+fix_*.py
+test_feasible.py

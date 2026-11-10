@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timetable Manager — AI-Powered Schedule Optimizer</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="app-header no-print">
+        <div class="header-left">
+            <div class="logo-icon">🗓️</div>
+            <h1>Timetable Manager <span class="badge">AI Optimized</span></h1>
+        </div>
+        <div class="header-right">
+            <button id="btn-generate" class="btn btn-primary">✨ Generate Schedule</button>
+            <button id="btn-toggle-setup" class="btn btn-secondary">⚙️ School Setup</button>
+            <button id="btn-toggle-chat" class="btn btn-accent">🤖 AI Assistant</button>
+            <button id="btn-print" class="btn btn-outline" onclick="window.print()">🖨️ Print View</button>
+        </div>
+    </header>
+
+    <!-- Main Application Container -->
+    <main class="app-main">
+        <!-- View Mode Selector -->
+        <div class="controls-bar no-print">
+            <div class="tabs">
+                <button class="tab-btn active" data-view="class-view">👨‍🎓 Class-Wise View</button>
+                <button class="tab-btn" data-view="teacher-view">👩‍🏫 Teacher-Wise View</button>
+            </div>
+            <div class="filter-group">
+                <label for="entity-select">Select Schedule:</label>
+                <select id="entity-select" class="form-select">
+                    <!-- Populated dynamically via JS -->
+                </select>
+            </div>
+        </div>
+
+        <!-- Status Dashboard / Score Stats -->
+        <div id="stats-banner" class="stats-banner no-print">
+            <div class="stat-card">
+                <span class="stat-label">Status</span>
+                <span id="stat-status" class="stat-val status-ok">Ready</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Optimization Score</span>
+                <span id="stat-score" class="stat-val">0.0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Total Assignments</span>
+                <span id="stat-count" class="stat-val">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Solve Duration</span>
+                <span id="stat-duration" class="stat-val">0.0s</span>
+            </div>
+        </div>
+
+        <!-- Printable Schedule Container -->
+        <div id="printable-container" class="printable-area">
+            <!-- Timetable Grid Rendered Dynamically -->
+            <div id="timetable-header" class="timetable-title">
+                <h2 id="current-entity-title">Class 10-A Schedule</h2>
+                <p class="subtitle">Generated automatically with zero resource clashes</p>
+            </div>
+            <div id="grid-container" class="grid-container">
+                <!-- Grid Cells populated by JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Setup / Configuration Drawer -->
+    <aside id="setup-drawer" class="drawer drawer-left no-print">
+        <div class="drawer-header">
+            <h3>🏫 School Configuration</h3>
+            <button class="btn-close" onclick="toggleSetupDrawer()">✕</button>
+        </div>
+        <div class="drawer-body">
+            <div class="form-section">
+                <h4>🔑 AI Engine Authorization</h4>
+                <label>Google Gemini API Key:</label>
+                <input type="password" id="input-api-key" class="form-input" placeholder="Paste Gemini API Key here...">
+                <small class="helper-text">Enables advanced ad-hoc neuro-symbolic changes. Stored locally.</small>
+            </div>
+            <hr>
+            <div class="form-section">
+                <h4>📚 Registered Entities Summary</h4>
+                <ul id="setup-summary-list" class="summary-list">
+                    <li>Loading metadata...</li>
+                </ul>
+            </div>
+            <div class="form-actions">
+                <button id="btn-save-config" class="btn btn-primary" style="width: 100%;">Save Configuration</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Gemini AI Assistant Drawer -->
+    <aside id="chat-drawer" class="drawer drawer-right no-print">
+        <div class="drawer-header">
+            <h3>🤖 Gemini Timetable Assistant</h3>
+            <button class="btn-close" onclick="toggleChatDrawer()">✕</button>
+        </div>
+        <div class="drawer-body chat-layout">
+            <div id="chat-messages" class="chat-messages">
+                <div class="message ai-msg">
+                    <p>Hello! I am your intelligent neuro-symbolic scheduling assistant. Ask me to make ad-hoc adjustments (e.g., *"Move Physics to Wednesday Period 1"*) or analyze schedule constraints.</p>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <textarea id="input-chat" class="form-input" rows="2" placeholder="Ask Gemini to update schedule..."></textarea>
+                <button id="btn-send-chat" class="btn btn-accent">Send</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden no-print">
+        <div class="spinner"></div>
+        <p>Solving complex multi-constraint scheduling model...</p>
+    </div>
+
+    <!-- Application Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/timetable.js"></script>
+    <script src="js/chat.js"></script>
+</body>
+</html>

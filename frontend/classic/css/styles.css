@@ -1,0 +1,511 @@
+:root {
+    --bg-base: #0f172a;
+    --bg-surface: #1e293b;
+    --bg-card: rgba(30, 41, 59, 0.7);
+    --border-color: #334155;
+    
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --secondary: #475569;
+    --secondary-hover: #334155;
+    --accent: #06b6d4;
+    --accent-hover: #0891b2;
+    
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    
+    --transition: all 0.2s ease-in-out;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header styling */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo-icon {
+    font-size: 1.8rem;
+}
+
+h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.header-right {
+    display: flex;
+    gap: 0.8rem;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+}
+.btn-primary:hover { background-color: var(--primary-hover); }
+
+.btn-secondary {
+    background-color: var(--secondary);
+    color: white;
+}
+.btn-secondary:hover { background-color: var(--secondary-hover); }
+
+.btn-accent {
+    background-color: var(--accent);
+    color: white;
+}
+.btn-accent:hover { background-color: var(--accent-hover); }
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+.btn-outline:hover { background-color: var(--bg-surface); border-color: var(--text-muted); }
+
+/* Controls & Tabs */
+.controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(8px);
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    background-color: var(--bg-surface);
+    padding: 0.3rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.tab-btn.active, .tab-btn:hover {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.form-select, .form-input {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    outline: none;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.form-select:focus, .form-input:focus {
+    border-color: var(--primary);
+}
+
+/* Stats dashboard */
+.stats-banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 0 2rem 1.5rem 2rem;
+}
+
+.stat-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-val {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+.status-ok { color: var(--success); }
+
+/* Main Grid Layout Container */
+.app-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.printable-area {
+    padding: 1rem 2rem 3rem 2rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.timetable-title {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.timetable-title h2 {
+    font-size: 1.6rem;
+    margin-bottom: 0.3rem;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.grid-container {
+    width: 100%;
+    max-width: 1200px;
+    display: grid;
+    grid-template-columns: 120px repeat(7, 1fr);
+    gap: 8px;
+    background-color: var(--bg-surface);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+/* Timetable Cells */
+.grid-cell {
+    background-color: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.8rem;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: var(--transition);
+}
+
+.grid-header {
+    background-color: var(--bg-card);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.95rem;
+    min-height: 45px;
+    border-color: transparent;
+}
+
+.day-label {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: var(--primary);
+    font-weight: 600;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.cell-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.subject-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-main);
+}
+
+.teacher-name, .room-name {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.cell-badge {
+    align-self: flex-start;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    background-color: rgba(6, 182, 212, 0.15);
+    color: var(--accent);
+}
+
+.empty-cell {
+    opacity: 0.4;
+    align-items: center;
+    justify-content: center;
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+/* Drawers */
+.drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 380px;
+    background-color: var(--bg-surface);
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease-in-out;
+}
+
+.drawer-left { left: 0; transform: translateX(-100%); }
+.drawer-right { right: 0; transform: translateX(100%); }
+
+.drawer.open { transform: translateX(0); }
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+.btn-close:hover { color: var(--text-main); }
+
+.drawer-body {
+    padding: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-section h4 {
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--accent);
+}
+
+.helper-text {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+.summary-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Chat interface */
+.chat-layout {
+    padding: 0;
+    gap: 0;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message {
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    max-width: 90%;
+}
+
+.ai-msg {
+    background-color: var(--bg-base);
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+}
+
+.user-msg {
+    background-color: var(--primary);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+
+.chat-input-area {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-surface);
+    display: flex;
+    gap: 0.5rem;
+}
+
+.chat-input-area textarea {
+    flex: 1;
+    resize: none;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(6px);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.hidden { display: none !important; }
+
+/* Dedicated Print Layout */
+@media print {
+    .no-print { display: none !important; }
+    
+    body {
+        background-color: white;
+        color: black;
+        font-size: 12pt;
+    }
+
+    .printable-area {
+        padding: 0;
+        width: 100%;
+    }
+    
+    .grid-container {
+        background-color: white;
+        border: none;
+        padding: 0;
+        gap: 2px;
+    }
+    
+    .grid-cell {
+        background-color: white !important;
+        border: 1px solid #aaa !important;
+        color: black !important;
+        padding: 0.4rem;
+        min-height: 70px;
+        page-break-inside: avoid;
+    }
+    
+    .subject-name { color: black !important; font-size: 11pt; font-weight: bold; }
+    .teacher-name, .room-name { color: #444 !important; font-size: 9pt; }
+    .grid-header { background-color: #eee !important; color: black !important; border: 1px solid #aaa !important; }
+    .day-label { background-color: #f8f8f8 !important; color: black !important; }
+}

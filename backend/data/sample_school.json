@@ -1,0 +1,90 @@
+{
+  "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  "periods_per_day": 7,
+  "subjects": [
+    {"id": "sub_math", "name": "Mathematics", "periods_per_week": 6, "requires_lab": false},
+    {"id": "sub_phy", "name": "Physics", "periods_per_week": 4, "requires_lab": true},
+    {"id": "sub_chem", "name": "Chemistry", "periods_per_week": 4, "requires_lab": true},
+    {"id": "sub_bio", "name": "Biology", "periods_per_week": 3, "requires_lab": true},
+    {"id": "sub_eng", "name": "English", "periods_per_week": 5, "requires_lab": false},
+    {"id": "sub_hin", "name": "Hindi", "periods_per_week": 4, "requires_lab": false},
+    {"id": "sub_sst", "name": "Social Science", "periods_per_week": 5, "requires_lab": false},
+    {"id": "sub_cs", "name": "Computer Science", "periods_per_week": 3, "requires_lab": true},
+    {"id": "sub_pt", "name": "Physical Education", "periods_per_week": 2, "requires_lab": false}
+  ],
+  "teachers": [
+    {
+      "id": "t1",
+      "name": "Teacher 1 (Math/Phy)",
+      "qualified_subjects": ["sub_math", "sub_phy"],
+      "max_periods_per_day": 5,
+      "unavailable_slots": []
+    },
+    {
+      "id": "t2",
+      "name": "Teacher 2 (Chem/Bio)",
+      "qualified_subjects": ["sub_chem", "sub_bio"],
+      "max_periods_per_day": 5,
+      "unavailable_slots": []
+    },
+    {
+      "id": "t3",
+      "name": "Teacher 3 (English/Hindi)",
+      "qualified_subjects": ["sub_eng", "sub_hin"],
+      "max_periods_per_day": 6,
+      "unavailable_slots": []
+    },
+    {
+      "id": "t4",
+      "name": "Teacher 4 (SSt/Hindi)",
+      "qualified_subjects": ["sub_sst", "sub_hin"],
+      "max_periods_per_day": 6,
+      "unavailable_slots": []
+    },
+    {
+      "id": "t5",
+      "name": "Teacher 5 (CS/Math)",
+      "qualified_subjects": ["sub_cs", "sub_math"],
+      "max_periods_per_day": 5,
+      "unavailable_slots": []
+    },
+    {
+      "id": "t6",
+      "name": "Teacher 6 (PT)",
+      "qualified_subjects": ["sub_pt"],
+      "max_periods_per_day": 6,
+      "unavailable_slots": []
+    }
+  ],
+  "classes": [
+    {
+      "id": "c_10a",
+      "name": "10-A",
+      "grade": 10,
+      "section": "A",
+      "subject_ids": ["sub_math", "sub_phy", "sub_chem", "sub_eng", "sub_hin", "sub_sst", "sub_pt"]
+    },
+    {
+      "id": "c_10b",
+      "name": "10-B",
+      "grade": 10,
+      "section": "B",
+      "subject_ids": ["sub_math", "sub_phy", "sub_bio", "sub_eng", "sub_hin", "sub_sst", "sub_pt"]
+    },
+    {
+      "id": "c_9a",
+      "name": "9-A",
+      "grade": 9,
+      "section": "A",
+      "subject_ids": ["sub_math", "sub_chem", "sub_bio", "sub_eng", "sub_sst", "sub_cs", "sub_pt"]
+    }
+  ],
+  "rooms": [
+    {"id": "r_10a", "name": "Room 10-A", "capacity": 45, "is_lab": false},
+    {"id": "r_10b", "name": "Room 10-B", "capacity": 45, "is_lab": false},
+    {"id": "r_9a", "name": "Room 9-A", "capacity": 45, "is_lab": false},
+    {"id": "r_sci_lab", "name": "Science Lab", "capacity": 40, "is_lab": true},
+    {"id": "r_cs_lab", "name": "Computer Lab", "capacity": 40, "is_lab": true},
+    {"id": "r_ground", "name": "Playground", "capacity": 100, "is_lab": false}
+  ]
+}

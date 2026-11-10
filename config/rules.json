@@ -1,0 +1,45 @@
+{
+  "teacher_rules": {
+    "max_periods_per_day": 8,
+    "soft_max_periods_per_day": 6,
+    "clubbed_classes": {
+      "enabled": false,
+      "allowed_subjects": [
+        "PHY EDU",
+        "LIBRARY"
+      ],
+      "max_concurrent": 2
+    },
+    "max_consecutive_periods": 4
+  },
+  "class_rules": {
+    "max_periods_per_subject_per_day": 2,
+    "first_period_reserved": "CLASS TEACHER",
+    "lab_practicals_as_double_period": true,
+    "heavy_subjects": [
+      "ENG",
+      "MATHS",
+      "SCIENCE",
+      "PHYSICS",
+      "CHEMISTRY",
+      "BIOLOGY",
+      "ACCOUNTS",
+      "ECONOMICS",
+      "BST",
+      "SST"
+    ],
+    "heavy_subjects_not_after_period": 6
+  },
+  "solver": {
+    "time_limit_seconds": 60,
+    "workers": 0,
+    "random_seed": 0,
+    "_help": "workers 0 = use all CPU cores (with 1 worker CP-SAT found no timetable in 60s on the real school)"
+  },
+  "weights": {
+    "same_subject_twice_a_day": 10,
+    "teacher_over_soft_daily_max": 3,
+    "heavy_subject_late": 1,
+    "teacher_long_run": 5
+  }
+}
